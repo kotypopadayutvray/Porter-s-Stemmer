@@ -3,8 +3,7 @@ class Stemmer
   attr_accessor :vowels, :consonants, :rv_regexp, :r1_regexp,
                 :perfective_gerund, :adjective, :participle,
                 :reflexive, :verb, :noun, :superlative,
-                :derivational, :participle_adjective,
-                :adjectival
+                :derivational
 
   def initialize
     @vowels = /[аеиоуыэюя]/i
@@ -21,18 +20,16 @@ class Stemmer
     @noun = /(а|ев|ов|ие|ье|е|иями|ями|ами|еи|ии|и|ией|ей|ой|ий|й|иям|ям|ием|ем|ам|ом|о|у|ах|иях|ях|ы|ь|ию|ью|ю|ия|ья|я)$/i
     @superlative = /(ейш|ейше)$/i
     @derivational = /(ост|ость)$/i
-    @participle_adjective = Regexp.new([@participle, @adjective].map { |r| r.source.delete('$') }.join + '$')
-    @adjectival = /(#{@adjective})|(#{@participle_adjective})/i
   end
 
   def stem(word)
+    return word if word.length == 1
     prefix = splice_by_pattern(@vowels, word)
-    rv_word = get_rv_area word
-    result = step_one rv_word
-    result = step_two result
-    result = step_three result
-    result = step_four result
-    prefix ? prefix[0].to_s + result : result
+    result = step_one word, get_rv_area(word)
+    result = step_two result, get_rv_area(result)
+    result = step_three result, get_r2_area(result)
+    result = step_four result, get_rv_area(result)
+    prefix && (result[0..(prefix[0].length - 1)] != prefix[0].to_s) ? prefix[0].to_s + result : result
   end
 
   private
@@ -52,29 +49,39 @@ class Stemmer
 
   def get_r1_area(word)
     return unless word
-    r1_area = word.split word.match(@r1_regexp).to_s
+    matched = word.match(@r1_regexp).to_s
+    r1_area = word.split matched
     return unless r1_area
-    r1_area[1]
+    r1_area.delete_at(0)
+    r1_area.join(matched)
   end
 
   def get_r2_area(word)
     get_r1_area(get_r1_area(word))
   end
 
-  def step_one(word)
+  def step_one(word, rv_area)
     # Check for perfective gerund ending
-    @perfective_gerund =~ word
+    @perfective_gerund =~ rv_area
     matched = check_for_matches word, Regexp.last_match, @perfective_gerund
     return matched if matched
     # Check for reflexive ending
     result = word
-    @reflexive =~ word
+    @reflexive =~ rv_area
     matched = check_for_matches word, Regexp.last_match, @reflexive
     result = matched if matched
+    # Adjectival = adjective + participle
+    @adjective =~ get_rv_area(result)
+    if (matched = check_for_matches result, Regexp.last_match, @adjective)
+      result = matched
+      @participle =~ get_rv_area(matched)
+      matched = check_for_matches result, Regexp.last_match, @participle
+      return matched || result
+    end
     # Check for other engings groups
-    %i[adjectival verb noun].each do |r|
+    %i[verb noun].each do |r|
       regexp = send(r)
-      regexp =~ result
+      regexp =~ get_rv_area(result)
       if (matched = check_for_matches result, Regexp.last_match, regexp)
         result = matched
         break
@@ -83,20 +90,20 @@ class Stemmer
     result
   end
 
-  def step_two(word)
-    return word[0..-2] if word[-1] == 'и'
+  def step_two(word, rv_area)
+    return word[0..-2] if rv_area[-1] == 'и'
     word
   end
 
-  def step_three(word)
-    @derivational =~ get_r2_area(word)
+  def step_three(word, r2_area)
+    @derivational =~ r2_area
     check_for_matches(word, Regexp.last_match, @derivational) || word
   end
 
-  def step_four(word)
-    if word.match?(/нн$/i) || word.match?(/ь$/i)
+  def step_four(word, rv_area)
+    if rv_area.match?(/нн$/i) || rv_area.match?(/ь$/i)
       word[0..-2]
-    elsif word.match?(@superlative)
+    elsif rv_area.match?(@superlative)
       result = word.gsub(@superlative, '')
       result.match?(/нн$/i) ? result[0..-2] : result
     else
@@ -107,6 +114,7 @@ class Stemmer
   def check_for_matches(word, match_data, regexp, group_name: :preceded)
     return unless match_data
     group_value = match_data&.names&.include?(group_name.to_s) ? match_data[group_name] : ''
-    word.gsub(regexp, '') + group_value.to_s
+    swap_regexp = Regexp.new(match_data.to_s + '$', regexp.options)
+    word.gsub(swap_regexp, '') + group_value.to_s
   end
 end

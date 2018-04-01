@@ -11,7 +11,7 @@ class TestStemmer < Test::Unit::TestCase
     stemmer = Stemmer.new
     file = File.open $file_path
     while (line = file.gets)
-      l, r = line.chomp.split
+      l, r = line.encode('UTF-8').chomp.split
       assert_equal(r, stemmer.stem(l))
     end
   end
