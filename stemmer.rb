@@ -43,7 +43,7 @@ class Stemmer
   def get_rv_area(word)
     return unless word
     spliced_word = splice_by_pattern @vowels, word
-    return word unless spliced_word
+    return '' unless spliced_word
     spliced_word[1]
   end
 
