@@ -14,5 +14,6 @@ class TestStemmer < Test::Unit::TestCase
       l, r = line.encode('UTF-8').chomp.split
       assert_equal(r, stemmer.stem(l))
     end
+    file.close
   end
 end
