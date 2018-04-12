@@ -12,6 +12,17 @@ def initialize_stemmer_dictionary(file_path)
   dictionary
 end
 
+def initialize_dictionary(file_path)
+  dictionary = []
+  File.open(file_path, 'r') do |file|
+    while (line = file.gets)
+      word, = line.encode('UTF-8').chomp.split
+      dictionary << word
+    end
+  end
+  dictionary
+end
+
 def levenshtein(word1, word2)
   m, n = word1.length, word2.length
   distance = []
@@ -24,7 +35,6 @@ def levenshtein(word1, word2)
                          distance[i - 1][j - 1]
                        else
                          a = [distance[i - 1][j - 1], distance[i][j - 1], distance[i - 1][j]]
-                         # p a
                          a.min + 1
                        end
     end
@@ -33,13 +43,24 @@ def levenshtein(word1, word2)
 end
 
 def n_gramm(word, length)
-  (0..word.length - length).map { |i| puts word[i, length] }
+  (0..word.length - length).map { |i| word[i, length] }
+end
+
+def find_same_words(dictionary, word)
+  trigramms = n_gramm(word, 3)
+  same = trigramms.map do |trigramm|
+    regexp = Regexp.new(trigramm, 'i')
+    dictionary.select { |dict_word| dict_word =~ regexp }
+  end.flatten
+  same.select { |e| levenshtein(e, word) <= 2 }
 end
 
 abort 'No command line arguments' if ARGV.length.zero?
 
 puts 'Initialazing dictionary for stemming. Wait please...'
 stemmer_dictionary = initialize_stemmer_dictionary(ARGV[0])
+puts 'Initialazing dictionary. Wait please...'
+dictionary = initialize_stemmer_dictionary(ARGV[0])
 puts 'Dictionary initialazed!'
 
 stemmer = Stemmer.new
@@ -57,7 +78,8 @@ loop do
     same_words = stemmer_dictionary[stemmer.stem(word)].join(',')
     puts "All words with the same base: #{same_words}\n\n"
   when 2
-    puts '123123'
+    word = $stdin.gets.chomp
+    puts find_same_words(dictionary, word)
   else
     puts "Wrong answer\n\n"
   end
